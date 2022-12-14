@@ -206,8 +206,9 @@ def get_fiman_atm(id, begin_date, end_date, engine):
 
         return r_df
     # Start date further than a month ago, attempt to use both database data and fresh data 
-    elif pd.to_datetime(begin_date) < month_ago:
+    if pd.to_datetime(begin_date) < month_ago:
         #TODO mix of database data and fresh data
+
 
     fiman_gauge_keys = pd.read_csv("data/fiman_gauge_key.csv").query("site_id == @id & Sensor == 'Barometric Pressure'")
     
