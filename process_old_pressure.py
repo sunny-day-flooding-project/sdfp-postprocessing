@@ -207,6 +207,7 @@ def get_fiman_atm(id, begin_date, end_date, engine):
         return r_df
     # Start date further than a month ago, attempt to use both database data and fresh data 
     if pd.to_datetime(begin_date) < month_ago:
+        sys.exit("ERROR")
         #TODO mix of database data and fresh data
 
 
