@@ -368,7 +368,7 @@ def match_measurements_to_survey(measurements, surveys):
         selected_survey = surveys.query("sensor_ID == @selected_site")
         print()
         print("selected_survey")
-        print(selected_survey.to_string())  # FOR DEBUGGING
+        # print(selected_survey.to_string())  # FOR DEBUGGING
         
         if selected_survey.empty:
             warnings.warn("There are no survey data for: " + selected_site)
@@ -378,13 +378,15 @@ def match_measurements_to_survey(measurements, surveys):
         
         if measurements["date"].min() < min(survey_dates):
             warnings.warn("Warning: There are data that precede the survey dates for: " + selected_site)
+
+        selected_measurements["date_surveyed"] = pd.to_datetime(survey_dates[0], utc=True)
             
-        if number_of_surveys == 1:
-            selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan), utc = True)
+        # if number_of_surveys == 1:
+        #     selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan), utc = True)
             
-        if number_of_surveys > 1:
-            survey_dates.append(pd.to_datetime(datetime.utcnow(), utc=True))
-            selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
+        # if number_of_surveys > 1:
+        #     survey_dates.append(pd.to_datetime(datetime.utcnow(), utc=True))
+        #     selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
     
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
         print()
@@ -441,34 +443,12 @@ def main():
     # Collect new data  #
     #####################
 
-    # max_date = pd.read_sql_query("SELECT max(date) as date FROM sensor_water_depth", engine)
-    # max_date = max_date.at[0, 'date'] + timedelta(days=3)
-    # max_date = max_date.strftime("%Y-%m-%d")
-    # print(max_date)
-
-    # end_date = os.environ.get('END_DATE')
-    # if end_date:
-    #     try:
-    #         validate_date(end_date)
-    #         query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date < '" + end_date + "'"
-    #     except ValueError:
-    #         print("End date is invalid")
-    #         return
-    # else:
-    #     query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date > '2022-12-01'"
-
-    # print(query)
-
-    # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed='FALSE' AND pressure > 800", engine)
-    # max_date = min_date.at[0, 'date'] + timedelta(days=7)
-    # max_date = max_date.strftime("%Y-%m-%d")
-    # query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date < '" + max_date + "'"
-
     min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed='FALSE' " +
                                     "AND pressure > 800 AND date < '2022-09-01' and \"sensor_ID\"='CB_02'", engine)
     min_date = min_date.at[0, 'date'] - timedelta(days=1)
     max_date = min_date + timedelta(days=7)
-    query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '" + min_date.strftime("%Y-%m-%d") + "' AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
+    # query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '" + min_date.strftime("%Y-%m-%d") + "' AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
+    query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
     print(query)
 
     try:
