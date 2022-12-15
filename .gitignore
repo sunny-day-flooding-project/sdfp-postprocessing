@@ -1,3 +1,5 @@
+Dockerfile.dev
+
 # Ignore the file that sets our env variables for local testing
 env_vars.py
 
