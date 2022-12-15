@@ -593,7 +593,8 @@ def main():
     # Process data  #
     #####################
 
-    end_date = pd.to_datetime(datetime.datetime.utcnow())
+    # end_date = pd.to_datetime(datetime.datetime.utcnow())
+    end_date = pd.to_datetime(os.environ.get('DRIFT_CORRECT_END'))
     start_date = end_date - datetime.timedelta(days=20)
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
