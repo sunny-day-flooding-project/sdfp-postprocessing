@@ -445,8 +445,7 @@ def main():
 
     min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed='FALSE' " +
                                     "AND pressure > 800 AND date < '2022-09-01' and \"sensor_ID\"='CB_02'", engine)
-    min_date = min_date.at[0, 'date'] - timedelta(days=1)
-    max_date = min_date + timedelta(days=7)
+    max_date = min_date.at[0, 'date'] + timedelta(days=6)
     # query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '" + min_date.strftime("%Y-%m-%d") + "' AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
     query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
     print(query)
