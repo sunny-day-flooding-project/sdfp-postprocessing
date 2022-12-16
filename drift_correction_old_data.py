@@ -21,9 +21,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 def get_wd_w_buffer(start_date, end_date, engine):
     new_start_date = start_date - datetime.timedelta(days = 7)
+    query = f"SELECT * FROM sensor_water_depth WHERE \"sensor_ID\"='CB_02' AND date >= '{new_start_date}' AND date <= '{end_date}'"
+    print(query)
     
     try:
-        new_data = pd.read_sql_query(f"SELECT * FROM sensor_water_depth WHERE \"sensor_id\"='CB_02' AND date >= '{new_start_date}' AND date <= '{end_date}'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
     except:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
@@ -113,12 +115,13 @@ def match_measurements_to_survey(measurements, surveys):
         if measurements["date"].min() < min(survey_dates):
             warnings.warn("Warning: There are data that precede the survey dates for: " + selected_site)
             
-        if number_of_surveys == 1:
-            selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan))
+        selected_measurements["date_surveyed"] = pd.to_datetime(survey_dates[0], utc=True)
+        # if number_of_surveys == 1:
+        #     selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan))
             
-        if number_of_surveys > 1:
-            survey_dates.append(pd.to_datetime(datetime.datetime.utcnow(), utc=True))
-            selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
+        # if number_of_surveys > 1:
+        #     survey_dates.append(pd.to_datetime(datetime.datetime.utcnow(), utc=True))
+        #     selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
     
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
         
@@ -594,7 +597,7 @@ def main():
     #####################
 
     # end_date = pd.to_datetime(datetime.datetime.utcnow())
-    end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%%M:%S"))
+    end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%M:%S"))
     start_date = end_date - datetime.timedelta(days=20)
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
