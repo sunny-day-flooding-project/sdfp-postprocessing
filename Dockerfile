@@ -14,5 +14,5 @@ EXPOSE 5432
 
 #ENV DRIFT_CORRECT_END='2022-06-20 00:00:00'
 
-# CMD ["python", "process_old_pressure.py"]
-CMD ["python", "drift_correction_old_data.py"]
+CMD ["python", "process_old_pressure.py"]
+# CMD ["python", "drift_correction_old_data.py"]

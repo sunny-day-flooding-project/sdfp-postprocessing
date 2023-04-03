@@ -193,6 +193,7 @@ def get_fiman_atm(id, begin_date, end_date, engine):
     month_ago = datetime.utcnow() - timedelta(days=31)
     # Both dates further than a month ago
     if pd.to_datetime(begin_date) < month_ago and pd.to_datetime(end_date) < month_ago:
+        print("ATTEMPTING TO GET DATA FROM DATABASE")
         begin_date = pd.to_datetime(begin_date, utc=True).strftime('%Y-%m-%d %H:%M:%S')
         end_date = pd.to_datetime(end_date, utc=True).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -444,9 +445,9 @@ def main():
     #####################
 
     min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed='FALSE' " +
-                                    "AND pressure > 800 AND date < '2022-09-13' and \"sensor_ID\"='CB_02'", engine)
+                                    "AND pressure > 800 AND date > '2022-11-10' AND date < '2023-01-05' and \"sensor_ID\"='CB_02'", engine)
     max_date = min_date.at[0, 'date'] + timedelta(days=6)
-    query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
+    query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800  and \"sensor_ID\"='CB_02' AND date > '2022-11-10' AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
     print(query)
 
     try:
