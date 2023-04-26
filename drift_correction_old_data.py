@@ -26,7 +26,6 @@ def get_wd_w_buffer(start_date, end_date, engine):
     
     try:
         new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
-        print(new_data.iloc[0])
     except:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
@@ -106,6 +105,9 @@ def match_measurements_to_survey(measurements, surveys):
         selected_measurements = measurements.query("sensor_ID == @selected_site").copy()
         
         selected_survey = surveys.query("sensor_ID == @selected_site")
+
+        print(selected_survey)
+        print(selected_measurements.iloc[0])
         
         if selected_survey.empty:
             warnings.warn("There are no survey data for: " + selected_site)
