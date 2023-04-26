@@ -106,7 +106,7 @@ def match_measurements_to_survey(measurements, surveys):
         
         selected_survey = surveys.query("sensor_ID == @selected_site")
 
-        print(selected_survey)
+        print(selected_survey.iloc[0])
         print(selected_measurements.iloc[0])
         
         if selected_survey.empty:
