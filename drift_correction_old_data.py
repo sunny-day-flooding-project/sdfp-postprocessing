@@ -26,6 +26,7 @@ def get_wd_w_buffer(start_date, end_date, engine):
     
     try:
         new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
+        print(new_data)
     except:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
