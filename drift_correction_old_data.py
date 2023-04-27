@@ -20,8 +20,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 #######################
 
 def get_wd_w_buffer(start_date, end_date, engine):
-    new_start_date = start_date - datetime.timedelta(days = 7)
-    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{new_start_date}' AND date <= '{end_date}' AND place='New Bern, North Carolina'"
+    # new_start_date = start_date - datetime.timedelta(days = 7)
+    # query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND place='New Bern, North Carolina'"
+    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND \"sensor_ID\"='NB_02'"
     print(query)
     
     try:
@@ -105,9 +106,6 @@ def match_measurements_to_survey(measurements, surveys):
         selected_measurements = measurements.query("sensor_ID == @selected_site").copy()
         
         selected_survey = surveys.query("sensor_ID == @selected_site")
-
-        print(selected_survey.iloc[0])
-        print(selected_measurements.iloc[0])
         
         if selected_survey.empty:
             warnings.warn("There are no survey data for: " + selected_site)
@@ -126,7 +124,7 @@ def match_measurements_to_survey(measurements, surveys):
             survey_dates.append(pd.to_datetime(datetime.datetime.utcnow(), utc=True))
             selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
     
-        print(selected_measurements)
+        # print(selected_measurements.iloc[0])
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
         
         matched_measurements = pd.concat([matched_measurements, merged_measurements_and_surveys]).drop_duplicates()
@@ -151,7 +149,8 @@ def calc_baseline_wl(x, surveys):
         
         if selected_survey.shape[0] == 0:
             warnings.warn(f"No survey data for: {selected_sensor}")
-            
+        
+        # print(selected_survey)
         merged_data = match_measurements_to_survey(measurements = selected_data, surveys = selected_survey)
         merged_data_w_smoothed_baseline_wl = smooth_baseline_wl(merged_data)
         
@@ -602,7 +601,7 @@ def main():
 
     # end_date = pd.to_datetime(datetime.datetime.utcnow())
     end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%M:%S"))
-    start_date = end_date - datetime.timedelta(days=7)
+    start_date = end_date - datetime.timedelta(days=14)
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
     surveys = get_surveys(engine)
