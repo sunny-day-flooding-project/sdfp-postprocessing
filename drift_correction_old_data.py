@@ -140,10 +140,9 @@ def calc_baseline_wl(x, surveys):
     smoothed_baseline_wl = pd.DataFrame()
 
     for selected_sensor in sensor_list:
-        # print(selected_sensor)
         selected_data = x.query("sensor_ID == @selected_sensor")
         selected_survey = surveys.query("sensor_ID == @selected_sensor")
-        
+
         if selected_data.shape[0] == 0:
             warnings.warn(f"No data for sensor for baseline calculation for: {selected_sensor}")     
         
@@ -601,7 +600,7 @@ def main():
 
     # end_date = pd.to_datetime(datetime.datetime.utcnow())
     end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%M:%S"))
-    start_date = end_date - datetime.timedelta(days=14)
+    start_date = end_date - datetime.timedelta(days=21)
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
     surveys = get_surveys(engine)
