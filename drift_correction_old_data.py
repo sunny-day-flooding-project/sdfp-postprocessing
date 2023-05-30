@@ -472,7 +472,8 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
         new_site_data_df = pd.concat([new_site_data_df,new_site_data])
     
     # Get pictures that align
-    new_site_data_df_w_pics = get_pictures_for_flooding(new_site_data_df)
+    # new_site_data_df_w_pics = get_pictures_for_flooding(new_site_data_df)
+    new_site_data_df_w_pics = new_site_data_df;
     
     # Convert full df of new flood events to string so we can write them to a google spreadsheet
     new_site_data_df_w_pics = new_site_data_df_w_pics.astype('str')
