@@ -22,7 +22,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 def get_wd_w_buffer(start_date, end_date, engine):
     # new_start_date = start_date - datetime.timedelta(days = 7)
     # query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND place='New Bern, North Carolina'"
-    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND \"sensor_ID\"='CB_03'"
+    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND \"sensor_ID\"='CB_02'"
     print(query)
     
     try:
