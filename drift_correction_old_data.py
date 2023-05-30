@@ -22,7 +22,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 def get_wd_w_buffer(start_date, end_date, engine):
     # new_start_date = start_date - datetime.timedelta(days = 7)
     # query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND place='New Bern, North Carolina'"
-    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND \"sensor_ID\"='NB_02'"
+    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND \"sensor_ID\"='CB_02'"
     print(query)
     
     try:
@@ -373,7 +373,8 @@ def alert_flooding(x, engine):
 def update_tracking_spreadsheet(data, flood_cutoff = 0):
     x=data.copy()
     
-    current_time = pd.Timestamp('now', tz= "UTC") + pd.offsets.Hour(-4)
+    # current_time = pd.Timestamp('now', tz= "UTC") + pd.offsets.Hour(-4)
+    current_time = pd.Timestamp(os.environ.get('DRIFT_CORRECT_END'), tz= "UTC") + pd.offsets.Hour(-4)
     
     flooding_measurements = x.reset_index().query("road_water_level_adj > @flood_cutoff").copy()
     
@@ -409,14 +410,15 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     
     # Iterate through each place, compare overlap of each flood event in our new data and the existing data in the spreadsheet
     # If there is no overlap, collect the flood event data to then write to spreadsheet
-    places = list(flooding_measurements["place"].unique())
+    # places = list(flooding_measurements["place"].unique())
+    sensor_IDs = list(flooding_measurements["sensor_ID"].unique())
     
     new_site_data_df = pd.DataFrame()
     
-    for selected_place in places:
-        print(selected_place)
-        site_data = flooding_measurements.query("place == @selected_place").copy()
-        site_existing_data = flood_start_stop.query("place == @selected_place").copy().reset_index()
+    for selected_sensor in sensor_IDs:
+        print(selected_sensor)
+        site_data = flooding_measurements.query("sensor_ID == @selected_sensor").copy()
+        site_existing_data = flood_start_stop.query("sensor_ID == @selected_sensor").copy().reset_index()
         
         last_flood_number = pd.to_numeric(site_existing_data.flood_event).max()
         site_data["flood_event"] = flood_counter(site_data.date, start_number = 0, lag_hrs = 2)
@@ -626,7 +628,7 @@ def main():
     #  Update flood tracking spreadsheet  #
     #######################################
     
-    # update_tracking_spreadsheet(data = drift_corrected_df, flood_cutoff = 0)
+    update_tracking_spreadsheet(data = drift_corrected_df, flood_cutoff = 0)
     
     #############################
     # Cleanup the DB connection #
