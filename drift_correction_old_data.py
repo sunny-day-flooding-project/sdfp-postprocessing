@@ -22,7 +22,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 def get_wd_w_buffer(start_date, end_date, engine):
     # new_start_date = start_date - datetime.timedelta(days = 7)
     # query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND place='New Bern, North Carolina'"
-    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND \"sensor_ID\"='CB_02'"
+    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND (\"sensor_ID\"='CB_01' OR \"sensor_ID\"='CB_03')"
     print(query)
     
     try:
@@ -629,7 +629,7 @@ def main():
     #  Update flood tracking spreadsheet  #
     #######################################
     
-    update_tracking_spreadsheet(data = drift_corrected_df, flood_cutoff = 0)
+    # update_tracking_spreadsheet(data = drift_corrected_df, flood_cutoff = 0)
     
     #############################
     # Cleanup the DB connection #
