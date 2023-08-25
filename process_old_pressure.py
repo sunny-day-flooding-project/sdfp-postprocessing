@@ -324,14 +324,7 @@ def interpolate_atm_data(x, engine, debug = True):
             warnings.warn(message = f"No atm pressure data available for: {selected_place}")
             pass
         else:              
-            # for index, row in atm_data.iterrows():
-            #     print(row['pressure_mb'])
-
-            # sys.exit()
-            # print(selected_data.iloc[0])
-            # print(atm_data.iloc[0])
             combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
-            # print(combined_data.iloc[0])
             combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
             interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
 
@@ -444,11 +437,19 @@ def main():
     # Collect new data  #
     #####################
 
-    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed='FALSE' " +
-                                    "AND pressure > 800 AND date > '2022-12-15' AND date < '2023-01-01' and \"sensor_ID\"='DE_01'", engine)
-    max_date = min_date.at[0, 'date'] + timedelta(days=6)
-    query = "SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800  and \"sensor_ID\"='DE_01' AND date > '2022-12-14' AND date <= '" + max_date.strftime("%Y-%m-%d") + "'"
-    print(query)
+    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
+                                    "AND pressure > 800 AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00'", engine)
+    
+    if min_date.iloc[0]["date"] is None:
+        print("No old data to be processed")
+        return
+    
+    max_date = min_date.at[0, 'date'] + timedelta(days=14)
+    min_date = min_date.at[0, 'date']
+
+    # query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND (( \"sensor_ID\" NOT LIKE 'CB%%' AND date >= '{min_date}' AND date <= '{max_date}')"
+    # query += f" OR (\"sensor_ID\" LIKE 'CB%%' AND date >= '{min_date}' AND date > '2022-12-18 00:00:00+00:00' AND date <= '{max_date}'))"
+    query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '{min_date}' AND date <= '{max_date}'"
 
     try:
         new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
@@ -461,6 +462,12 @@ def main():
     
     if new_data.shape[0] == 0:
         warnings.warn("- No new raw data!")
+        return
+    elif new_data.shape[0] == 1:
+        warnings.warn("Single record, marking as processed")
+        new_data['processed'] = True
+        new_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
+        new_data.to_sql("sensor_data", engine, if_exists = "append", method=postgres_upsert)
         return
     
     print(new_data.shape[0] , "new records!")
@@ -502,6 +509,7 @@ def main():
     
     # Upsert the new data to the database table
     try:
+        formatted_data['processed'] = False
         formatted_data.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
         print("Processed data to produce water depth!")
     except Exception as ex:
