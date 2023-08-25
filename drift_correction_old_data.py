@@ -612,7 +612,7 @@ def main():
 
     # end_date = pd.to_datetime(datetime.datetime.utcnow())
     end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%M:%S"))
-    start_date = end_date - datetime.timedelta(days=21)
+    start_date = end_date - datetime.timedelta(days=7)
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
     surveys = get_surveys(engine)
