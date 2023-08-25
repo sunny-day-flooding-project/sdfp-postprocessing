@@ -392,7 +392,10 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     flooding_measurements = flooding_measurements[["place", "sensor_ID", "date", "road_water_level_adj", "road_water_level", "voltage", "min_date", "max_date"]]
  
     # Download existing flood events from Google Sheets
-    json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
+    # json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
+    f = open('auth.json')
+    json_secret = json.load(f)
+    f.close()
     google_sheet_id = os.environ.get('GOOGLE_SHEET_ID')
     scope = ["https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict=json_secret, scopes=scope)
@@ -423,6 +426,9 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
         site_existing_data = flood_start_stop.query("sensor_ID == @selected_sensor").copy().reset_index()
         
         last_flood_number = pd.to_numeric(site_existing_data.flood_event).max()
+        if (pd.isna(last_flood_number)):
+            last_flood_number = 0
+
         site_data["flood_event"] = flood_counter(site_data.date, start_number = 0, lag_hrs = 2)
         
         flood_events_occuring = site_data.groupby("flood_event").max_date.max() > current_time
@@ -609,7 +615,7 @@ def main():
 
     # end_date = pd.to_datetime(datetime.datetime.utcnow())
     end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%M:%S"))
-    start_date = end_date - datetime.timedelta(days=14)
+    start_date = end_date - datetime.timedelta(days=21)
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
     surveys = get_surveys(engine)
