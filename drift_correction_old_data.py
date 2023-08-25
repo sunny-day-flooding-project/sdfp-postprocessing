@@ -392,10 +392,7 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     flooding_measurements = flooding_measurements[["place", "sensor_ID", "date", "road_water_level_adj", "road_water_level", "voltage", "min_date", "max_date"]]
  
     # Download existing flood events from Google Sheets
-    # json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
-    f = open('auth.json')
-    json_secret = json.load(f)
-    f.close()
+    json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
     google_sheet_id = os.environ.get('GOOGLE_SHEET_ID')
     scope = ["https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict=json_secret, scopes=scope)
