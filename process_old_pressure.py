@@ -212,40 +212,49 @@ def get_fiman_atm(id, begin_date, end_date, engine):
         #TODO mix of database data and fresh data
 
 
-    fiman_gauge_keys = pd.read_csv("data/fiman_gauge_key.csv").query("site_id == @id & Sensor == 'Barometric Pressure'")
+    # fiman_gauge_keys = pd.read_csv("data/fiman_gauge_key.csv").query("site_id == @id & Sensor == 'Barometric Pressure'")
     
-    new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
-    new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
+    # new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
+    # new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
     
-    query = {'site_id' : fiman_gauge_keys.iloc[0]["site_id"],
-             'data_start' : new_begin_date.strftime('%Y-%m-%d %H:%M:%S'),
-             'end_date' : new_end_date.strftime('%Y-%m-%d %H:%M:%S'),
-             'format_datetime' : '%Y-%m-%d %H:%M:%S',
-             'tz' : 'utc',
-             'show_raw' : True,
-             'show_quality' : True,
-             'sensor_id' : fiman_gauge_keys.iloc[0]["sensor_id"]}
-    print(query)    # FOR DEBUGGING
+    # query = {'site_id' : fiman_gauge_keys.iloc[0]["site_id"],
+    #          'data_start' : new_begin_date.strftime('%Y-%m-%d %H:%M:%S'),
+    #          'end_date' : new_end_date.strftime('%Y-%m-%d %H:%M:%S'),
+    #          'format_datetime' : '%Y-%m-%d %H:%M:%S',
+    #          'tz' : 'utc',
+    #          'show_raw' : True,
+    #          'show_quality' : True,
+    #          'sensor_id' : fiman_gauge_keys.iloc[0]["sensor_id"]}
+    # print(query)    # FOR DEBUGGING
     
     # try:
-    r = requests.get(os.environ.get("FIMAN_URL"), params=query, timeout=600)
+    # r = requests.get(os.environ.get("FIMAN_URL"), params=query, timeout=600)
     # except requests.exceptions.Timeout:
     #     return pd.DataFrame()
 
-    j = r.content
-    print(j)
-    doc = xmltodict.parse(j)
+    # j = r.content
+    # print(j)
+    # doc = xmltodict.parse(j)
     
-    unnested = doc["onerain"]["response"]["general"]["row"]
+    # unnested = doc["onerain"]["response"]["general"]["row"]
     
-    r_df = pd.DataFrame.from_dict(unnested)
+    # r_df = pd.DataFrame.from_dict(unnested)
+    SQLALCHEMY_DATABASE_URL = "postgresql://" + os.environ.get('POSTGRESQL_USER') + ":" + os.environ.get(
+        'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
 
-    r_df["date"] = pd.to_datetime(r_df["data_time"], utc=True); 
-    r_df["id"] = str(id); 
-    r_df["notes"] = "FIMAN"
-    r_df = r_df.loc[:,["id","date","data_value","notes"]].rename(columns = {"data_value":"pressure_mb"})
-
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    r_df = pd.read_sql_query("SELECT * FROM external_api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'", engine).sort_values(['date']).drop_duplicates()
+    r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
+    r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
+    
     return r_df
+
+    # r_df["date"] = pd.to_datetime(r_df["data_time"], utc=True); 
+    # r_df["id"] = str(id); 
+    # r_df["notes"] = "FIMAN"
+    # r_df = r_df.loc[:,["id","date","data_value","notes"]].rename(columns = {"data_value":"pressure_mb"})
+
+    # return r_df
 
 #####################
 # atm API functions #
