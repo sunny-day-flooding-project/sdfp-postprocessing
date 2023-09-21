@@ -393,6 +393,9 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
  
     # Download existing flood events from Google Sheets
     json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
+    # f = open('auth.json')
+    # json_secret = json.load(f)
+    # f.close()
     google_sheet_id = os.environ.get('GOOGLE_SHEET_ID')
     scope = ["https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict=json_secret, scopes=scope)
@@ -402,6 +405,9 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     worksheet = sh.get_worksheet(0)
         
     sheet_data_df = pd.DataFrame(worksheet.get_all_records())
+
+    stop = flooding_measurements[["date"]].max().iloc[0].strftime("%Y-%m-%d %H:%M:%S")
+    sheet_data_df = sheet_data_df.query("date <= @stop")
 
     min_dates = sheet_data_df.groupby(["place", "sensor_ID", "flood_event"])[["date"]].min() 
     max_dates = sheet_data_df.groupby(["place", "sensor_ID", "flood_event"])[["date"]].max()
@@ -414,7 +420,6 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     # If there is no overlap, collect the flood event data to then write to spreadsheet
     # places = list(flooding_measurements["place"].unique())
     sensor_IDs = list(flooding_measurements["sensor_ID"].unique())
-    
     new_site_data_df = pd.DataFrame()
     
     for selected_sensor in sensor_IDs:
@@ -464,9 +469,8 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
             site_keep_list.append(site_keep)
             
         if sum(site_keep_list) == 0:
-            # pass
-            print("No new flood events")
-            return 
+            print("No new flood events for selected sensor")
+            pass
         
         new_flood_events = site_flood_start_stop[site_keep_list].reset_index()
         
@@ -476,6 +480,10 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
         new_site_data = new_site_data.loc[:,['place','sensor_ID','flood_event', 'date', 'road_water_level_adj', 'road_water_level', 'drift', 'voltage']]
         new_site_data_df = pd.concat([new_site_data_df,new_site_data])
     
+    if (new_site_data_df.size == 0):
+        print("No new flood events to write to spreadsheet")
+        return
+
     # Get pictures that align
     # new_site_data_df_w_pics = get_pictures_for_flooding(new_site_data_df)
 
