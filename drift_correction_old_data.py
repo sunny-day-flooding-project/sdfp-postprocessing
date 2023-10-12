@@ -624,7 +624,7 @@ def main():
         print("No old data to be processed")
         return
     
-    end_date = start_date.at[0, 'date'] + datetime.timedelta(days=14)
+    end_date = start_date.at[0, 'date'] + datetime.timedelta(days=7)
     start_date = start_date.at[0, 'date']
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
