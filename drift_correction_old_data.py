@@ -20,10 +20,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 #######################
 
 def get_wd_w_buffer(start_date, end_date, engine):
-    # new_start_date = start_date - datetime.timedelta(days = 7)
-    # query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND place='New Bern, North Carolina'"
-    # query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND (\"sensor_ID\"='CB_01' OR \"sensor_ID\"='CB_03')"
-    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}'"
+    query = f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{end_date}' AND processed=False"
     print(query)
     
     try:
@@ -374,15 +371,18 @@ def alert_flooding(x, engine):
 
 def update_tracking_spreadsheet(data, flood_cutoff = 0):
     x=data.copy()
-    
-    # current_time = pd.Timestamp('now', tz= "UTC") + pd.offsets.Hour(-4)
-    current_time = pd.Timestamp(os.environ.get('DRIFT_CORRECT_END'), tz= "UTC") + pd.offsets.Hour(-4)
+
+    # data_start_date = x.index.min()[2]
+    data_end_date = x.index.max()[2]
+
+    current_time = pd.Timestamp(data_end_date) + pd.offsets.Hour(-4)
     
     flooding_measurements = x.reset_index().query("road_water_level_adj > @flood_cutoff").copy()
     
     n_flooding_measurements = flooding_measurements.shape[0]
   
     if(n_flooding_measurements == 0):
+        print("No flooding to update spreadsheet")
         return "No flooding to update spreadsheet"
     
     flooding_measurements = flooding_measurements.reset_index()
@@ -392,10 +392,10 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     flooding_measurements = flooding_measurements[["place", "sensor_ID", "date", "road_water_level_adj", "road_water_level", "voltage", "min_date", "max_date"]]
  
     # Download existing flood events from Google Sheets
-    json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
-    # f = open('auth.json')
-    # json_secret = json.load(f)
-    # f.close()
+    # json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
+    f = open('auth.json')
+    json_secret = json.load(f)
+    f.close()
     google_sheet_id = os.environ.get('GOOGLE_SHEET_ID')
     scope = ["https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict=json_secret, scopes=scope)
@@ -403,11 +403,8 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     gc = gspread.service_account_from_dict(json_secret)
     sh = gc.open_by_key(google_sheet_id)
     worksheet = sh.get_worksheet(0)
-        
-    sheet_data_df = pd.DataFrame(worksheet.get_all_records())
 
-    stop = flooding_measurements[["date"]].max().iloc[0].strftime("%Y-%m-%d %H:%M:%S")
-    sheet_data_df = sheet_data_df.query("date <= @stop")
+    sheet_data_df = pd.DataFrame(worksheet.get_all_records())
 
     min_dates = sheet_data_df.groupby(["place", "sensor_ID", "flood_event"])[["date"]].min() 
     max_dates = sheet_data_df.groupby(["place", "sensor_ID", "flood_event"])[["date"]].max()
@@ -420,17 +417,16 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     # If there is no overlap, collect the flood event data to then write to spreadsheet
     # places = list(flooding_measurements["place"].unique())
     sensor_IDs = list(flooding_measurements["sensor_ID"].unique())
+    
     new_site_data_df = pd.DataFrame()
     
     for selected_sensor in sensor_IDs:
         print(selected_sensor)
+
         site_data = flooding_measurements.query("sensor_ID == @selected_sensor").copy()
         site_existing_data = flood_start_stop.query("sensor_ID == @selected_sensor").copy().reset_index()
         
         last_flood_number = pd.to_numeric(site_existing_data.flood_event).max()
-        if (pd.isna(last_flood_number)):
-            last_flood_number = 0
-
         site_data["flood_event"] = flood_counter(site_data.date, start_number = 0, lag_hrs = 2)
         
         flood_events_occuring = site_data.groupby("flood_event").max_date.max() > current_time
@@ -469,8 +465,9 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
             site_keep_list.append(site_keep)
             
         if sum(site_keep_list) == 0:
-            print("No new flood events for selected sensor")
-            pass
+            # pass
+            print("No new flood events")
+            return 
         
         new_flood_events = site_flood_start_stop[site_keep_list].reset_index()
         
@@ -480,13 +477,9 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
         new_site_data = new_site_data.loc[:,['place','sensor_ID','flood_event', 'date', 'road_water_level_adj', 'road_water_level', 'drift', 'voltage']]
         new_site_data_df = pd.concat([new_site_data_df,new_site_data])
     
-    if (new_site_data_df.size == 0):
-        print("No new flood events to write to spreadsheet")
-        return
-
     # Get pictures that align
     # new_site_data_df_w_pics = get_pictures_for_flooding(new_site_data_df)
-
+    # new_site_data_df_w_pics = new_site_data_df;
     new_site_data_df['pic_links'] = ''
     new_site_data_df['date_added'] = pd.to_datetime(datetime.datetime.utcnow())
     
@@ -618,13 +611,26 @@ def main():
     # Process data  #
     #####################
 
-    # end_date = pd.to_datetime(datetime.datetime.utcnow())
-    end_date = pd.to_datetime(datetime.datetime.strptime(os.environ.get('DRIFT_CORRECT_END'), "%Y-%m-%d %H:%M:%S"))
-    start_date = end_date - datetime.timedelta(days=7)
+    start_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_water_depth WHERE processed=False AND date >= '2021-06-23 00:00:00+00:00'", engine)
+    if start_date.iloc[0]["date"] is None:
+        print("No old data to be processed")
+        return
+    
+    end_date = start_date.at[0, 'date'] + datetime.timedelta(days=14)
+    start_date = start_date.at[0, 'date']
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
-    surveys = get_surveys(engine)
 
+    if new_data.shape[0] == 1:
+        warnings.warn("Single record, marking as processed")
+        new_data['processed'] = True
+        new_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
+        new_data.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
+        return
+    
+    print(new_data.shape[0], " records to be processed")
+
+    surveys = get_surveys(engine)
     qa_qcd_df = qa_qc_flag(new_data).query("qa_qc_flag == False")
     smoothed_min_wl_df = calc_baseline_wl(qa_qcd_df, surveys)
     drift_corrected_df = correct_drift(smoothed_min_wl_df, start_date, end_date)
@@ -632,15 +638,17 @@ def main():
     try:
         drift_corrected_df.to_sql("data_for_display", engine, if_exists = "append", method=postgres_upsert, chunksize = 3000)
         print("Drift-corrected data written to database!")
+        
     except:
         warnings.warn("Error writing drift-corrected data to database")
-    
-    
-    ###################
-    #  Flood alerts  #
-    ###################
-   
-    # alert_flooding(x = drift_corrected_df, engine = engine)
+
+    try:
+        new_data['processed'] = True
+        new_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
+        new_data.to_sql('sensor_water_depth', engine, if_exists = "append", method=postgres_upsert, chunksize = 3000) 
+        print("Sensor water depth data marked as processed")
+    except:
+        warnings.warn("Error marking sensor water depth data as processed")
     
     #######################################
     #  Update flood tracking spreadsheet  #

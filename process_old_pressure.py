@@ -182,63 +182,10 @@ def get_fiman_atm(id, begin_date, end_date, engine):
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     
-    #
-    # It looks like if the data are not long enough (date-wise), the query to fiman will not return anything
-    # at which point this will fail.
-    #
 
-    # TODO check if/how much data actually exists in range
+    new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
+    new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
 
-    # FIMAN API only allows queries up to 31 days ago, check for existing data from other sensors if further back then that
-    month_ago = datetime.utcnow() - timedelta(days=31)
-    # Both dates further than a month ago
-    if pd.to_datetime(begin_date) < month_ago and pd.to_datetime(end_date) < month_ago:
-        print("ATTEMPTING TO GET DATA FROM DATABASE")
-        begin_date = pd.to_datetime(begin_date, utc=True).strftime('%Y-%m-%d %H:%M:%S')
-        end_date = pd.to_datetime(end_date, utc=True).strftime('%Y-%m-%d %H:%M:%S')
-
-        r_df = pd.read_sql_query("SELECT date, atm_pressure FROM sensor_water_depth WHERE date >= '" + begin_date + "' " +
-                            "AND date <= '" + end_date + "' AND atm_data_src='FIMAN' AND atm_station_id='" + id +"'", engine).drop_duplicates()
-
-        r_df["date"] = pd.to_datetime(r_df["date"], utc=True); 
-        r_df["id"] = str(id); 
-        r_df["notes"] = "FIMAN"
-        r_df = r_df.loc[:,["id","date","atm_pressure","notes"]].rename(columns = {"atm_pressure":"pressure_mb"})
-
-        return r_df
-    # Start date further than a month ago, attempt to use both database data and fresh data 
-    if pd.to_datetime(begin_date) < month_ago:
-        sys.exit("ERROR")
-        #TODO mix of database data and fresh data
-
-
-    # fiman_gauge_keys = pd.read_csv("data/fiman_gauge_key.csv").query("site_id == @id & Sensor == 'Barometric Pressure'")
-    
-    # new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
-    # new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
-    
-    # query = {'site_id' : fiman_gauge_keys.iloc[0]["site_id"],
-    #          'data_start' : new_begin_date.strftime('%Y-%m-%d %H:%M:%S'),
-    #          'end_date' : new_end_date.strftime('%Y-%m-%d %H:%M:%S'),
-    #          'format_datetime' : '%Y-%m-%d %H:%M:%S',
-    #          'tz' : 'utc',
-    #          'show_raw' : True,
-    #          'show_quality' : True,
-    #          'sensor_id' : fiman_gauge_keys.iloc[0]["sensor_id"]}
-    # print(query)    # FOR DEBUGGING
-    
-    # try:
-    # r = requests.get(os.environ.get("FIMAN_URL"), params=query, timeout=600)
-    # except requests.exceptions.Timeout:
-    #     return pd.DataFrame()
-
-    # j = r.content
-    # print(j)
-    # doc = xmltodict.parse(j)
-    
-    # unnested = doc["onerain"]["response"]["general"]["row"]
-    
-    # r_df = pd.DataFrame.from_dict(unnested)
     SQLALCHEMY_DATABASE_URL = "postgresql://" + os.environ.get('POSTGRESQL_USER') + ":" + os.environ.get(
         'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
 
@@ -248,13 +195,6 @@ def get_fiman_atm(id, begin_date, end_date, engine):
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
     
     return r_df
-
-    # r_df["date"] = pd.to_datetime(r_df["data_time"], utc=True); 
-    # r_df["id"] = str(id); 
-    # r_df["notes"] = "FIMAN"
-    # r_df = r_df.loc[:,["id","date","data_value","notes"]].rename(columns = {"data_value":"pressure_mb"})
-
-    # return r_df
 
 #####################
 # atm API functions #
@@ -335,6 +275,7 @@ def interpolate_atm_data(x, engine, debug = True):
         else:              
             combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
             combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
+
             interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
 
         if debug == True:
@@ -384,12 +325,12 @@ def match_measurements_to_survey(measurements, surveys):
 
         selected_measurements["date_surveyed"] = pd.to_datetime(survey_dates[0], utc=True)
             
-        # if number_of_surveys == 1:
-        #     selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan), utc = True)
+        if number_of_surveys == 1:
+            selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan), utc = True)
             
-        # if number_of_surveys > 1:
-        #     survey_dates.append(pd.to_datetime(datetime.utcnow(), utc=True))
-        #     selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
+        if number_of_surveys > 1:
+            survey_dates.append(pd.to_datetime(datetime.utcnow(), utc=True))
+            selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
     
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
         print()
@@ -448,6 +389,8 @@ def main():
 
     min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
                                     "AND pressure > 800 AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00'", engine)
+    # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
+    #                                 "AND pressure > 800 AND notes != 'test'", engine)
     
     if min_date.iloc[0]["date"] is None:
         print("No old data to be processed")
@@ -456,8 +399,6 @@ def main():
     max_date = min_date.at[0, 'date'] + timedelta(days=14)
     min_date = min_date.at[0, 'date']
 
-    # query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND (( \"sensor_ID\" NOT LIKE 'CB%%' AND date >= '{min_date}' AND date <= '{max_date}')"
-    # query += f" OR (\"sensor_ID\" LIKE 'CB%%' AND date >= '{min_date}' AND date > '2022-12-18 00:00:00+00:00' AND date <= '{max_date}'))"
     query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '{min_date}' AND date <= '{max_date}'"
 
     try:
