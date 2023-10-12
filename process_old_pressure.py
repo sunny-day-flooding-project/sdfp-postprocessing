@@ -387,8 +387,11 @@ def main():
     # Collect new data  #
     #####################
 
-    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
-                                    "AND pressure > 800 AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00'", engine)
+    today= pd.to_datetime(datetime.utcnow())
+    max_date = today - timedelta(days=14)
+
+    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
+                                    f"AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00' AND date < '{max_date}'", engine)
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
     #                                 "AND pressure > 800 AND notes != 'test'", engine)
     

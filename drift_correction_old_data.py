@@ -611,7 +611,10 @@ def main():
     # Process data  #
     #####################
 
-    start_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_water_depth WHERE processed=False AND date >= '2021-06-23 00:00:00+00:00'", engine)
+    today= pd.to_datetime(datetime.datetime.utcnow())
+    max_date = today - datetime.timedelta(days=7)
+
+    start_date = pd.read_sql_query(f"SELECT min(date) as date FROM sensor_water_depth WHERE processed=False AND date >= '2021-06-23 00:00:00+00:00' AND date < '{max_date}'", engine)
     if start_date.iloc[0]["date"] is None:
         print("No old data to be processed")
         return
