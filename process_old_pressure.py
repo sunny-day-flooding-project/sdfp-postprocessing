@@ -337,7 +337,7 @@ def match_measurements_to_survey(measurements, surveys):
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
         print()
         print("merged_measurements_and_surveys")
-        print(merged_measurements_and_surveys.to_string())  # FOR DEBUGGING
+        # print(merged_measurements_and_surveys.to_string())  # FOR DEBUGGING
         
         matched_measurements = pd.concat([matched_measurements, merged_measurements_and_surveys]).drop_duplicates()
         matched_measurements["notes"] = matched_measurements["notes_x"]
