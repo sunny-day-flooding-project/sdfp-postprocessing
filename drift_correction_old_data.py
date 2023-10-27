@@ -374,7 +374,12 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     # data_start_date = x.index.min()[2]
     data_end_date = x.index.max()[2]
 
-    current_time = pd.Timestamp(data_end_date) + pd.offsets.Hour(-4)
+    # current_time = pd.Timestamp(data_end_date) + pd.offsets.Hour(-4)
+    current_time = pd.Timestamp(data_end_date) + pd.offsets.Hour(-24)
+    print("DATA END DATE IS ")
+    print(data_end_date)
+    print("CURRENT TIME IS ")
+    print(current_time)
     
     flooding_measurements = x.reset_index().query("road_water_level_adj > @flood_cutoff").copy()
     
