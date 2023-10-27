@@ -214,6 +214,8 @@ def get_atm_pressure(atm_id, atm_src, begin_date, end_date, engine):
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
 
+    print("ATM_SRC")
+    print(atm_src)
     match atm_src.upper():
         case "NOAA":
             return get_noaa_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
