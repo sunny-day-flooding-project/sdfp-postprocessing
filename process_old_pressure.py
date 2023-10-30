@@ -247,6 +247,7 @@ def interpolate_atm_data(x, engine, debug = True):
         dt_max = dt_range[1]
         
         print(selected_data["atm_station_id"].unique())
+
         if dt_duration >= timedelta(days=30):
             chunks = int(np.ceil(dt_duration / timedelta(days=30)))
             span = dt_duration / chunks
@@ -323,7 +324,7 @@ def match_measurements_to_survey(measurements, surveys):
         survey_dates = list(selected_survey["date_surveyed"].unique())
         number_of_surveys = len(survey_dates)
         
-        if measurements["date"].min() < min(survey_dates):s
+        if measurements["date"].min() < min(survey_dates):
             warnings.warn("Warning: There are data that precede the survey dates for: " + selected_site)
 
         selected_measurements["date_surveyed"] = pd.to_datetime(survey_dates[0], utc=True)
