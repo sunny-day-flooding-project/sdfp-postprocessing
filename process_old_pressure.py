@@ -323,6 +323,8 @@ def match_measurements_to_survey(measurements, surveys):
         number_of_surveys = len(survey_dates)
         
         if measurements["date"].min() < min(survey_dates):
+            print(measurements["date"].min())
+            print(min(survey_dates))
             warnings.warn("Warning: There are data that precede the survey dates for: " + selected_site)
 
         selected_measurements["date_surveyed"] = pd.to_datetime(survey_dates[0], utc=True)
