@@ -445,7 +445,8 @@ def main():
         return
         
     prepared_data = match_measurements_to_survey(measurements = new_data, surveys = surveys)
-    #print(prepared_data.to_string())    # FOR DEBUGGING
+    print(prepared_data.to_string())    # FOR DEBUGGING
+    return
     
     try: 
         interpolated_data = interpolate_atm_data(prepared_data, engine)
