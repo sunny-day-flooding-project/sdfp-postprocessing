@@ -245,8 +245,6 @@ def interpolate_atm_data(x, engine, debug = True):
         dt_duration = dt_range[1] - dt_range[0]
         dt_min = dt_range[0]
         dt_max = dt_range[1]
-        
-        print(selected_data["atm_station_id"].unique())
 
         if dt_duration >= timedelta(days=30):
             chunks = int(np.ceil(dt_duration / timedelta(days=30)))
@@ -445,8 +443,7 @@ def main():
         return
         
     prepared_data = match_measurements_to_survey(measurements = new_data, surveys = surveys)
-    print(prepared_data.to_string())    # FOR DEBUGGING
-    return
+    # print(prepared_data.to_string())    # FOR DEBUGGING
     
     try: 
         interpolated_data = interpolate_atm_data(prepared_data, engine)
