@@ -401,7 +401,7 @@ def main():
         print("No old data to be processed")
         return
     
-    max_date = min_date.at[0, 'date'] + timedelta(days=7)
+    max_date = min_date.at[0, 'date'] + timedelta(days=3)
     min_date = min_date.at[0, 'date']
 
     query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '{min_date}' AND date <= '{max_date}'"
