@@ -467,7 +467,7 @@ def main():
     
     # Upsert the new data to the database table
     try:
-        formatted_data['processed'] = False
+        # formatted_data['processed'] = False
         formatted_data.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
         print("Processed data to produce water depth!")
     except Exception as ex:
