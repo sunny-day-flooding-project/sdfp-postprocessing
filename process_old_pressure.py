@@ -169,7 +169,7 @@ def get_isu_atm(id, begin_date, end_date):
     
     return r_df
 
-def get_fiman_atm(id, begin_date, end_date, engine):
+def get_fiman_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the NOAA tides and currents API
 
     Args:
@@ -193,14 +193,15 @@ def get_fiman_atm(id, begin_date, end_date, engine):
     r_df = pd.read_sql_query("SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'", engine).sort_values(['date']).drop_duplicates()
     r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
-    
+    print(r_df)
+
     return r_df
 
 #####################
 # atm API functions #
 #####################
 
-def get_atm_pressure(atm_id, atm_src, begin_date, end_date, engine):
+def get_atm_pressure(atm_id, atm_src, begin_date, end_date):
     """Yo, yo, yo, it's a wrapper function!
 
     Args:
@@ -224,7 +225,7 @@ def get_atm_pressure(atm_id, atm_src, begin_date, end_date, engine):
         case "ISU":
             return get_isu_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
         case "FIMAN":
-            return get_fiman_atm(id = atm_id, begin_date = begin_date, end_date = end_date, engine = engine)
+            return get_fiman_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
         case _:
             return "No valid `atm_src` provided! Make sure you are supplying a string"
         
@@ -259,8 +260,7 @@ def interpolate_atm_data(x, engine, debug = True):
                 d = get_atm_pressure(atm_id = selected_data["atm_station_id"].unique()[0], 
                                             atm_src = selected_data["atm_data_src"].unique()[0], 
                                             begin_date = range_min.strftime("%Y%m%d %H:%M"),
-                                            end_date = range_max.strftime("%Y%m%d %H:%M"), 
-                                            engine = engine)
+                                            end_date = range_max.strftime("%Y%m%d %H:%M"))
                 
                 atm_data = pd.concat([atm_data, d]).drop_duplicates()
                 
@@ -268,17 +268,29 @@ def interpolate_atm_data(x, engine, debug = True):
                 atm_data = get_atm_pressure(atm_id = selected_data["atm_station_id"].unique()[0], 
                                             atm_src = selected_data["atm_data_src"].unique()[0], 
                                             begin_date = dt_min.strftime("%Y%m%d %H:%M"),
-                                            end_date = dt_max.strftime("%Y%m%d %H:%M"),
-                                            engine = engine).drop_duplicates()     
+                                            end_date = dt_max.strftime("%Y%m%d %H:%M")
+                                            ).drop_duplicates()     
             
-        if(atm_data.empty):            
-            warnings.warn(message = f"No atm pressure data available for: {selected_place}")
-            pass
-        else:              
-            combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
-            combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
+        # print("MAX DATA DATE")
+        # print(selected_data['date'].max())
+        # print("MIN ATM DATA DATE")
+        if(selected_data["alt_atm_data_src"].unique()[0] and (atm_data.empty or atm_data['date'].max() < selected_data['date'].min()
+                                                                or atm_data['date'].min() > selected_data['date'].max()) ):
+            # Try backup source
+            print("Trying backup source...")
+            atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
+                                atm_src = selected_data["alt_atm_data_src"].unique()[0], 
+                                begin_date = dt_min.strftime("%Y%m%d %H:%M"),
+                                end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates() 
+            
+            if (atm_data.empty):
+                warnings.warn(message = f"No atm pressure data available for: {selected_place}")
+                pass
+                     
+        combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
+        combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
 
-            interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
+        interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
 
         if debug == True:
             print("####################################")
@@ -395,7 +407,7 @@ def main():
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
     #                                 f"AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00' AND date < '{max_date}'", engine)
     min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
-                                    f"AND notes != 'test' AND date >= '2023-11-27 00:00:00+00:00' AND date < '{max_date}'", engine)
+                                    f"AND notes != 'test' AND date >= '2023-01-01 00:00:00+00:00' AND date < '{max_date}'", engine)
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
     #                                 "AND pressure > 800 AND notes != 'test'", engine)
     
@@ -403,7 +415,7 @@ def main():
         print("No old data to be processed")
         return
     
-    max_date = min_date.at[0, 'date'] + timedelta(days=3)
+    max_date = min_date.at[0, 'date'] + timedelta(days=7)
     min_date = min_date.at[0, 'date']
 
     query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '{min_date}' AND date <= '{max_date}'"
