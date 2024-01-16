@@ -376,10 +376,10 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
 
     # current_time = pd.Timestamp(data_end_date) + pd.offsets.Hour(-4)
     current_time = pd.Timestamp(data_end_date) + pd.offsets.Hour(-24)
-    print("DATA END DATE IS ")
-    print(data_end_date)
-    print("CURRENT TIME IS ")
-    print(current_time)
+    # print("DATA END DATE IS ")
+    # print(data_end_date)
+    # print("CURRENT TIME IS ")
+    # print(current_time)
     
     flooding_measurements = x.reset_index().query("road_water_level_adj > @flood_cutoff").copy()
     
@@ -624,15 +624,15 @@ def main():
     today= pd.to_datetime(datetime.datetime.utcnow())
     max_date = today - datetime.timedelta(days=7)
 
-    start_date = pd.read_sql_query(f"SELECT min(date) as date FROM sensor_water_depth WHERE processed=False AND date >= '2021-06-23 00:00:00+00:00' AND date < '{max_date}'", engine)
+    start_date = pd.read_sql_query(f"SELECT min(date) as date FROM sensor_water_depth WHERE processed=False AND date >= '2022-01-01 00:00:00+00:00' AND date < '{max_date}'", engine)
     if start_date.iloc[0]["date"] is None:
         print("No old data to be processed")
         return
     
     end_date = start_date.at[0, 'date'] + datetime.timedelta(days=3)
     start_date = start_date.at[0, 'date'] - datetime.timedelta(days=3)
-    print(f"START DATE IS {start_date}")
-    print(f"END DATE IS {end_date}")
+    # print(f"START DATE IS {start_date}")
+    # print(f"END DATE IS {end_date}")
 
     new_data = get_wd_w_buffer(start_date, end_date, engine)
 
@@ -658,10 +658,10 @@ def main():
         warnings.warn("Error writing drift-corrected data to database")
 
     try:
-        # print("MARKING AS PROCESSED")
-        processed_date = start_date + datetime.timedelta(days=4)
+        print("MARKING AS PROCESSED")
+        processed_date = start_date + datetime.timedelta(days=5)
         new_data = pd.read_sql_query(f"SELECT * FROM sensor_water_depth WHERE date >= '{start_date}' AND date <= '{processed_date}' AND processed=False", engine)
-        print(new_data['date'])
+        # print(new_data['date'])
         new_data['processed'] = True
         new_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
         new_data.to_sql('sensor_water_depth', engine, if_exists = "append", method=postgres_upsert, chunksize = 3000) 
