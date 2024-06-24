@@ -12,4 +12,5 @@ COPY . .
 
 EXPOSE 5432
 
-CMD ["python", "drift_correction_old_data.py"]
+# CMD ["python", "drift_correction_old_data.py"]
+CMD ["python", "timestamp-fix.py"]
