@@ -86,8 +86,11 @@ def get_noaa_atm(id, begin_date, end_date):
              'application' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}
     
     r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query)
-    
+
     j = r.json()
+
+    if ('data' not in j):
+        return pd.DataFrame()
     
     r_df = pd.DataFrame.from_dict(j["data"])
     
@@ -406,7 +409,7 @@ def main():
 
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
     #                                 f"AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00' AND date < '{max_date}'", engine)
-    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
+    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800" +
                                     f"AND notes != 'test' AND date >= '2022-01-01 00:00:00+00:00' AND date < '{max_date}'", engine)
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
     #                                 "AND pressure > 800 AND notes != 'test'", engine)
