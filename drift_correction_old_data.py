@@ -396,10 +396,17 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     flooding_measurements = flooding_measurements[["place", "sensor_ID", "date", "road_water_level_adj", "road_water_level", "voltage", "min_date", "max_date"]]
  
     # Download existing flood events from Google Sheets
-    json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
-    # f = open('auth.json')
-    # json_secret = json.load(f)
-    # f.close()
+    host_os = os.getenv("HOST_OS")
+    if host_os and host_os.lower() == "windows":
+        # for local running only below
+        fp = open("/code/auth.json")  
+        json_secret = fp.read()
+        fp.close()
+        json_secret = json.loads(json_secret)
+        json_secret["private_key"] = json_secret["private_key"].replace("\\n", "\n")
+    else:
+        # The line below is for OpenShift running
+        json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
     google_sheet_id = os.environ.get('GOOGLE_SHEET_ID')
     scope = ["https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict=json_secret, scopes=scope)
@@ -508,7 +515,18 @@ def update_tracking_spreadsheet(data, flood_cutoff = 0):
     return
 
 def get_pictures_for_flooding(data):
-    json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
+    host_os = os.getenv("HOST_OS")
+    if host_os and host_os.lower() == "windows":
+        # for local running only below
+        fp = open("/code/auth.json")  
+        json_secret = fp.read()
+        fp.close()
+        json_secret = json.loads(json_secret)
+        json_secret["private_key"] = json_secret["private_key"].replace("\\n", "\n")
+    else:
+        # The line below is for OpenShift running
+        json_secret = json.loads(os.environ.get('GOOGLE_JSON_KEY'))
+
     google_drive_folder_id = os.environ.get('GOOGLE_DRIVE_FOLDER_ID')
     scope = ["https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict=json_secret, scopes=scope)
