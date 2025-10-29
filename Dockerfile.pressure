@@ -2,11 +2,9 @@ FROM python:3.10.4
 
 WORKDIR /code
 
-# COPY requirements.txt .
-COPY requirements_drift_correction.txt .
+COPY requirements.txt .
 
-# RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
-RUN pip install --no-cache-dir --upgrade -r /code/requirements_drift_correction.txt
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 COPY . .
 
