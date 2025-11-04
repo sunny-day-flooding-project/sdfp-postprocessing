@@ -409,7 +409,7 @@ def main():
 
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
     #                                 f"AND notes != 'test' AND date >= '2021-06-23 00:00:00+00:00' AND date < '{max_date}'", engine)
-    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800" +
+    min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False AND pressure > 800 " +
                                     f"AND notes != 'test' AND date >= '2022-01-01 00:00:00+00:00' AND date < '{max_date}'", engine)
     # min_date = pd.read_sql_query("SELECT min(date) as date FROM sensor_data WHERE processed=False " +
     #                                 "AND pressure > 800 AND notes != 'test'", engine)
