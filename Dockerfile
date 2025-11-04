@@ -10,5 +10,5 @@ COPY . .
 
 EXPOSE 5432
 
-# CMD ["python", "process_old_pressure.py"]
-CMD ["python", "drift_correction_old_data.py"]
+CMD ["python", "process_old_pressure.py"]
+# CMD ["python", "drift_correction_old_data.py"]
