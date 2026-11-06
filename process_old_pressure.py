@@ -308,9 +308,14 @@ def interpolate_atm_data(x, engine, debug = True):
                                 begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                 end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates() 
             
-            if (atm_data.empty):
-                logger.warning("No atm pressure data available for: %s", selected_place)
-                pass
+        if atm_data.empty or "date" not in atm_data.columns:
+            logger.warning("No atm pressure data available for: %s", selected_place)
+            if debug:
+                logger.info(
+                    "- %s new observations skipped because no atmospheric pressure data was available",
+                    selected_data.shape[0],
+                )
+            continue
                      
         combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
         combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
