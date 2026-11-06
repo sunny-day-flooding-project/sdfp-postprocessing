@@ -14,7 +14,6 @@ from urllib.request import urlopen
 import xmltodict
 import numpy as np
 from sqlalchemy import create_engine
-import traceback
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -499,47 +498,87 @@ def main():
     
     try: 
         interpolated_data = interpolate_atm_data(prepared_data, engine)
-    except Exception as ex:
-        logger.debug("%s", traceback.format_exc())
-        interpolated_data = pd.DataFrame()
-        logger.warning("Error interpolating atmospheric pressure data.")
-        template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-        message = template.format(type(ex).__name__, ex.args)
-        logger.debug("%s", message)
-    
-    if interpolated_data.shape[0] == 0:
-        logger.warning("No data to write to database!")
+    except Exception:
+        logger.exception(
+            "Error interpolating atmospheric pressure data; raw records will remain unprocessed for retry."
+        )
+        engine.dispose()
+        return
 
-        return "No data to write to database!"
-    
-    formatted_data = format_interpolated_data(interpolated_data)
-    
-    # Upsert the new data to the database table
+    raw_data_keys = ["place", "sensor_ID", "date"]
+    output_write_succeeded = False
+
+    if interpolated_data.empty:
+        logger.warning(
+            "No atmospheric pressure interpolation produced output for %s raw records.",
+            new_data.shape[0],
+        )
+        output_keys = pd.DataFrame(columns=raw_data_keys)
+    else:
+        formatted_data = format_interpolated_data(interpolated_data)
+        usable_output = formatted_data.loc[
+            formatted_data["sensor_water_depth"].notna()
+        ].copy()
+        output_keys = usable_output.reset_index()[raw_data_keys].drop_duplicates()
+
+        if usable_output.empty:
+            logger.warning(
+                "No valid water-depth output; skipping %s raw records.",
+                new_data.shape[0],
+            )
+        else:
+            usable_output["processed"] = False
+            try:
+                usable_output.to_sql(
+                    "sensor_water_depth",
+                    engine,
+                    if_exists="append",
+                    method=postgres_upsert,
+                )
+                output_write_succeeded = True
+                logger.debug("Processed data to produce water depth!")
+            except Exception:
+                logger.exception("Error adding processed data to `sensor_water_depth`")
+
+    skipped_raw_data = new_data.merge(
+        output_keys.assign(_has_output=True),
+        on=raw_data_keys,
+        how="left",
+    )
+    skipped_raw_data = skipped_raw_data.loc[
+        skipped_raw_data["_has_output"].isna()
+    ].drop(columns="_has_output")
+    if not skipped_raw_data.empty:
+        skipped_raw_data["processed"] = True
+        logger.warning(
+            "Marking %s raw records as processed without water-depth output.",
+            skipped_raw_data.shape[0],
+        )
+
+    if output_write_succeeded:
+        processed_raw_data = new_data.merge(output_keys, on=raw_data_keys, how="inner")
+        processed_raw_data["processed"] = True
+    else:
+        processed_raw_data = new_data.iloc[0:0].copy()
+
+    updated_raw_data = pd.concat(
+        [processed_raw_data, skipped_raw_data],
+        ignore_index=True,
+    ).drop_duplicates(subset=raw_data_keys)
+    updated_raw_data.set_index(raw_data_keys, inplace=True)
+
+    # Update raw data to indicate it was processed or intentionally skipped.
     try:
-        formatted_data['processed'] = False
-        formatted_data.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
-        logger.debug("Processed data to produce water depth!")
-    except Exception as ex:
-        logger.warning("Error adding processed data to `sensor_water_depth`")
-        template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-        message = template.format(type(ex).__name__, ex.args)
-        logger.debug("%s", message)
-    
-    updated_raw_data = new_data.merge(formatted_data.reset_index().loc[:,["place","sensor_ID","date","sensor_water_depth"]], on=["place","sensor_ID","date"], how = "left")
-    updated_raw_data = updated_raw_data[updated_raw_data["sensor_water_depth"].notna()].drop(columns="sensor_water_depth")
-    updated_raw_data["processed"] = True
-    
-    updated_raw_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
-    
-    # Update raw data to indicate it has been processed
-    try:
-        updated_raw_data.to_sql("sensor_data", engine, if_exists = "append", method=postgres_upsert)
-        logger.debug("Updated raw data to indicate that it was processed!")
-    except Exception as ex:
-        logger.warning("Error updating raw data with `processed` tag")
-        template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-        message = template.format(type(ex).__name__, ex.args)
-        logger.debug("%s", message)
+        if not updated_raw_data.empty:
+            updated_raw_data.to_sql(
+                "sensor_data",
+                engine,
+                if_exists="append",
+                method=postgres_upsert,
+            )
+            logger.debug("Updated raw data processing status.")
+    except Exception:
+        logger.exception("Error updating raw data with `processed` tag")
     
     engine.dispose()
 
