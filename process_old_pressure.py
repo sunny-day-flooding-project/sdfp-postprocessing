@@ -1,5 +1,8 @@
 import os
 import sys
+import logging
+import threading
+import time
 from unicodedata import numeric
 from pytz import timezone
 import requests
@@ -10,23 +13,25 @@ from io import StringIO
 from urllib.request import urlopen
 import xmltodict
 import numpy as np
-import warnings
 from sqlalchemy import create_engine
-import inspect
 import traceback
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+_atm_request_lock = threading.Lock()
+_last_atm_request_time = None
+_atm_request_interval_seconds = 2
 
 ########################
 # Utility functions    #
 ########################
 
-# override print so each statement is timestamped
-old_print = print
-def timestamped_print(*args, **kwargs):
-  old_print(datetime.now(), *args, **kwargs)
-print = timestamped_print
-
-
 def slicer(my_str,sub):
+        logger.debug("Entering slicer")
         index=my_str.find(sub)
         if index !=-1 :
             return my_str[index:] 
@@ -35,6 +40,7 @@ def slicer(my_str,sub):
         
         
 def postgres_upsert(table, conn, keys, data_iter):
+    logger.debug("Entering postgres_upsert")
     from sqlalchemy.dialects.postgresql import insert
 
     data = [dict(zip(keys, row)) for row in data_iter]
@@ -48,6 +54,7 @@ def postgres_upsert(table, conn, keys, data_iter):
     
     
 def postgres_safe_insert(table, conn, keys, data_iter):
+    logger.debug("Entering postgres_safe_insert")
     from sqlalchemy.dialects.postgresql import insert
 
     data = [dict(zip(keys, row)) for row in data_iter]
@@ -74,7 +81,7 @@ def get_noaa_atm(id, begin_date, end_date):
     Returns:
         r_df (pd.DataFrame): DataFrame of atmospheric pressure from specified station and time range. Dates in UTC
     """    
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering get_noaa_atm")
     
     query = {'station' : str(id),
              'begin_date' : begin_date,
@@ -113,7 +120,7 @@ def get_nws_atm(id, begin_date, end_date):
     Returns:
         response (str): Still working on this!        
     """    
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering get_nws_atm")
     
     new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
     new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
@@ -141,7 +148,7 @@ def get_isu_atm(id, begin_date, end_date):
         begin_date (str): Beginning date of requested time period. Format: %Y%m%d %H:%M
         end_date (str): End date of requested time period. Format: %Y%m%d %H:%M
     """   
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering get_isu_atm")
     
     new_begin_date = pd.to_datetime(begin_date, utc=True) 
     new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(days=1)
@@ -183,7 +190,7 @@ def get_fiman_atm(id, begin_date, end_date):
     Returns:
         r_df (pd.DataFrame): DataFrame of atmospheric pressure from specified station and time range. Dates in UTC
     """    
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering get_fiman_atm")
     
 
     new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
@@ -196,7 +203,7 @@ def get_fiman_atm(id, begin_date, end_date):
     r_df = pd.read_sql_query("SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'", engine).sort_values(['date']).drop_duplicates()
     r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
-    print(r_df)
+    logger.debug("%s", r_df)
 
     return r_df
 
@@ -216,31 +223,47 @@ def get_atm_pressure(atm_id, atm_src, begin_date, end_date):
     Returns:
         pandas.DataFrame: Atmospheric pressure data for the specified time range and source
     """    
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering get_atm_pressure")
 
-    print("ATM_SRC")
-    print(atm_src)
-    match atm_src.upper():
-        case "NOAA":
-            return get_noaa_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
-        case "NWS":
-            return get_nws_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
-        case "ISU":
-            return get_isu_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
-        case "FIMAN":
-            return get_fiman_atm(id = atm_id, begin_date = begin_date, end_date = end_date)
-        case _:
-            return "No valid `atm_src` provided! Make sure you are supplying a string"
+    logger.info(
+        "ATM_SRC: %s, id: %s, begin_date: %s, end_date: %s",
+        atm_src,
+        atm_id,
+        begin_date,
+        end_date,
+    )
+    source = atm_src.upper()
+    if source not in {"NOAA", "NWS", "ISU", "FIMAN"}:
+        return "No valid `atm_src` provided! Make sure you are supplying a string"
+
+    global _last_atm_request_time
+    with _atm_request_lock:
+        if _last_atm_request_time is not None:
+            elapsed = time.monotonic() - _last_atm_request_time
+            wait_time = _atm_request_interval_seconds - elapsed
+            if wait_time > 0:
+                time.sleep(wait_time)
+
+        _last_atm_request_time = time.monotonic()
+        match source:
+            case "NOAA":
+                return get_noaa_atm(id=atm_id, begin_date=begin_date, end_date=end_date)
+            case "NWS":
+                return get_nws_atm(id=atm_id, begin_date=begin_date, end_date=end_date)
+            case "ISU":
+                return get_isu_atm(id=atm_id, begin_date=begin_date, end_date=end_date)
+            case "FIMAN":
+                return get_fiman_atm(id=atm_id, begin_date=begin_date, end_date=end_date)
         
         
 def interpolate_atm_data(x, engine, debug = True):
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering interpolate_atm_data")
     place_names = list(x["place"].unique())
     
     interpolated_data = pd.DataFrame()
     
     for selected_place in place_names:
-        print("for " + selected_place)
+        logger.info("for %s", selected_place)
         
         selected_data = x.query("place == @selected_place").copy()
         selected_data["pressure_mb"] = np.nan
@@ -280,14 +303,14 @@ def interpolate_atm_data(x, engine, debug = True):
         if(selected_data["alt_atm_data_src"].unique()[0] and (atm_data.empty or atm_data['date'].max() < selected_data['date'].min()
                                                                 or atm_data['date'].min() > selected_data['date'].max()) ):
             # Try backup source
-            print("Trying backup source...")
+            logger.info("Trying backup source...")
             atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
                                 atm_src = selected_data["alt_atm_data_src"].unique()[0], 
                                 begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                 end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates() 
             
             if (atm_data.empty):
-                warnings.warn(message = f"No atm pressure data available for: {selected_place}")
+                logger.warning("No atm pressure data available for: %s", selected_place)
                 pass
                      
         combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
@@ -296,18 +319,22 @@ def interpolate_atm_data(x, engine, debug = True):
         interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
 
         if debug == True:
-            print("####################################")
-            print(f"- New raw data detected for: {selected_place}")
-            print("- " , selected_data.shape[0] , " new rows")
-            print("- Date duration is: ", dt_duration.days, " days")
-            print("- " , selected_data.shape[0] - combined_data.loc[combined_data["place"].notna()].shape[0], "new observation(s) filtered out b/c not within atm pressure date range")
-            print("####################################")
+            logger.info("####################################")
+            logger.info("- New raw data detected for: %s", selected_place)
+            logger.info("- %s new rows", selected_data.shape[0])
+            logger.info("- Date duration is: %s days", dt_duration.days)
+            logger.info(
+                "- %s new observation(s) filtered out b/c not within atm pressure date range",
+                selected_data.shape[0]
+                - combined_data.loc[combined_data["place"].notna()].shape[0],
+            )
+            logger.info("####################################")
     
     return interpolated_data
 
 
 def match_measurements_to_survey(measurements, surveys):
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering match_measurements_to_survey")
 
     sites = measurements["sensor_ID"].unique()
     survey_sites = surveys["sensor_ID"].unique()
@@ -316,29 +343,35 @@ def match_measurements_to_survey(measurements, surveys):
     missing_sites = list(set(sites).difference(survey_sites))
     
     if len(missing_sites) > 0:
-        warnings.warn(message = str("Missing survey data for: " + ''.join(missing_sites) + ". The site(s) will not be processed."))    
+        logger.warning(
+            "Missing survey data for: %s. The site(s) will not be processed.",
+            "".join(missing_sites),
+        )
     
     matched_measurements = pd.DataFrame()
     
     for selected_site in matching_sites:
-        print(selected_site)
+        logger.info("%s", selected_site)
         
         selected_measurements = measurements.query("sensor_ID == @selected_site").copy()
-        print(selected_measurements.to_string())    # FOR DEBUGGING
+        logger.debug("%s", selected_measurements.to_string())    # FOR DEBUGGING
         
         selected_survey = surveys.query("sensor_ID == @selected_site")
-        print()
-        print("selected_survey")
+        logger.info("")
+        logger.info("selected_survey")
         # print(selected_survey.to_string())  # FOR DEBUGGING
         
         if selected_survey.empty:
-            warnings.warn("There are no survey data for: " + selected_site)
+            logger.warning("There are no survey data for: %s", selected_site)
         
         survey_dates = list(selected_survey["date_surveyed"].unique())
         number_of_surveys = len(survey_dates)
         
         if measurements["date"].min() < min(survey_dates):
-            warnings.warn("Warning: There are data that precede the survey dates for: " + selected_site)
+            logger.warning(
+                "Warning: There are data that precede the survey dates for: %s",
+                selected_site,
+            )
 
         selected_measurements["date_surveyed"] = pd.to_datetime(survey_dates[0], utc=True)
             
@@ -350,20 +383,20 @@ def match_measurements_to_survey(measurements, surveys):
             selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
     
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
-        print()
-        print("merged_measurements_and_surveys")
+        logger.debug("")
+        logger.debug("merged_measurements_and_surveys")
         # print(merged_measurements_and_surveys.to_string())  # FOR DEBUGGING
         
         matched_measurements = pd.concat([matched_measurements, merged_measurements_and_surveys]).drop_duplicates()
         matched_measurements["notes"] = matched_measurements["notes_x"]
         matched_measurements.drop(columns = ['notes_x','notes_y'],inplace=True)
-        print("matched_measurements.shape: ", matched_measurements.shape)
+        logger.debug("matched_measurements.shape: %s", matched_measurements.shape)
         
     return matched_measurements
 
 
 def format_interpolated_data(x):
-    print(inspect.stack()[0][3])    # print the name of the function we just entered
+    logger.debug("Entering format_interpolated_data")
 
     formatted_data = x.copy()
     formatted_data.rename(columns = {"pressure_mb":'atm_pressure', 'pressure':'sensor_pressure'}, inplace = True)
@@ -379,6 +412,7 @@ def format_interpolated_data(x):
     return formatted_data.drop_duplicates()
 
 def validate_date(date_text):
+        logger.debug("Entering validate_date")
         try:
             datetime.strptime(date_text, '%Y-%m-%d')
         except ValueError:
@@ -386,7 +420,7 @@ def validate_date(date_text):
 
 
 def main():
-    print("Entering main of process_pressure.py")
+    logger.debug("Entering main")
     
     # from env_vars import set_env_vars
     # set_env_vars()
@@ -415,7 +449,7 @@ def main():
     #                                 "AND pressure > 800 AND notes != 'test'", engine)
     
     if min_date.iloc[0]["date"] is None:
-        print("No old data to be processed")
+        logger.debug("No old data to be processed")
         return
     
     max_date = min_date.at[0, 'date'] + timedelta(days=7)
@@ -423,27 +457,27 @@ def main():
 
     query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date >= '{min_date}' AND date <= '{max_date}'"
 
-    print(query)
+    logger.debug("%s", query)
     try:
         new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
-        warnings.warn("Connection to database failed to return data")
+        logger.warning("Connection to database failed to return data")
         template = "An exception of type {0} occurred. Arguments:\n{1!r}"
         message = template.format(type(ex).__name__, ex.args)
-        print(message)
+        logger.debug("%s", message)
     
     if new_data.shape[0] == 0:
-        warnings.warn("- No new raw data!")
+        logger.warning("- No new raw data!")
         return
     elif new_data.shape[0] == 1:
-        warnings.warn("Single record, marking as processed")
+        logger.warning("Single record, marking as processed")
         new_data['processed'] = True
         new_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
         new_data.to_sql("sensor_data", engine, if_exists = "append", method=postgres_upsert)
         return
     
-    print(new_data.shape[0] , "new records!")
+    logger.info("%s new records!", new_data.shape[0])
         
     sensors_w_new_data = list(new_data["sensor_ID"].unique())
     
@@ -451,13 +485,13 @@ def main():
         surveys = pd.read_sql_table("sensor_surveys", engine).sort_values(['place','date_surveyed']).drop_duplicates()
     except Exception as ex:
         surveys = pd.DataFrame()
-        warnings.warn("Connection to database failed to return data")
+        logger.warning("Connection to database failed to return data")
         template = "An exception of type {0} occurred. Arguments:\n{1!r}"
         message = template.format(type(ex).__name__, ex.args)
-        print(message)
+        logger.debug("%s", message)
         
     if surveys.shape[0] == 0:
-        warnings.warn("- No survey data!")
+        logger.warning("- No survey data!")
         return
         
     prepared_data = match_measurements_to_survey(measurements = new_data, surveys = surveys)
@@ -466,15 +500,15 @@ def main():
     try: 
         interpolated_data = interpolate_atm_data(prepared_data, engine)
     except Exception as ex:
-        print(traceback.format_exc())
+        logger.debug("%s", traceback.format_exc())
         interpolated_data = pd.DataFrame()
-        warnings.warn("Error interpolating atmospheric pressure data.")
+        logger.warning("Error interpolating atmospheric pressure data.")
         template = "An exception of type {0} occurred. Arguments:\n{1!r}"
         message = template.format(type(ex).__name__, ex.args)
-        print(message)
+        logger.debug("%s", message)
     
     if interpolated_data.shape[0] == 0:
-        warnings.warn("No data to write to database!")
+        logger.warning("No data to write to database!")
 
         return "No data to write to database!"
     
@@ -484,12 +518,12 @@ def main():
     try:
         formatted_data['processed'] = False
         formatted_data.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
-        print("Processed data to produce water depth!")
+        logger.debug("Processed data to produce water depth!")
     except Exception as ex:
-        warnings.warn("Error adding processed data to `sensor_water_depth`")
+        logger.warning("Error adding processed data to `sensor_water_depth`")
         template = "An exception of type {0} occurred. Arguments:\n{1!r}"
         message = template.format(type(ex).__name__, ex.args)
-        print(message)
+        logger.debug("%s", message)
     
     updated_raw_data = new_data.merge(formatted_data.reset_index().loc[:,["place","sensor_ID","date","sensor_water_depth"]], on=["place","sensor_ID","date"], how = "left")
     updated_raw_data = updated_raw_data[updated_raw_data["sensor_water_depth"].notna()].drop(columns="sensor_water_depth")
@@ -500,12 +534,12 @@ def main():
     # Update raw data to indicate it has been processed
     try:
         updated_raw_data.to_sql("sensor_data", engine, if_exists = "append", method=postgres_upsert)
-        print("Updated raw data to indicate that it was processed!")
+        logger.debug("Updated raw data to indicate that it was processed!")
     except Exception as ex:
-        warnings.warn("Error updating raw data with `processed` tag")
+        logger.warning("Error updating raw data with `processed` tag")
         template = "An exception of type {0} occurred. Arguments:\n{1!r}"
         message = template.format(type(ex).__name__, ex.args)
-        print(message)
+        logger.debug("%s", message)
     
     engine.dispose()
 
